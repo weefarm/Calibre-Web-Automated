@@ -198,7 +198,12 @@ RUN \
 # add unrar
 COPY --from=unrar /usr/bin/unrar-ubuntu /usr/bin/unrar
 
-# ports and volumes
+# Create non-root user and switch to it
+RUN useradd -U -u 1000 appuser && \
+    chown -R 1000:1000 /app /config /cwa-book-ingest /calibre-library
+USER 1000
+
+# ports and volumes
 EXPOSE 8083
 VOLUME /config
 VOLUME /cwa-book-ingest
