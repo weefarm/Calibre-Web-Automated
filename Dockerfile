@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-FROM ghcr.io/linuxserver/unrar:latest AS unrar
-FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy
+FROM ghcr.io/linuxserver/unrar:7.1.10@sha256:92b4d32099ca9c9290bed83b4ba7cad5b0f563fd3e3bc63ca6a924b6f8a9245b AS unrar
+FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy@sha256:aca1b37b3344e25513d1d3384518ca687664eb2b7382224c570ab644d691e558
 
 # Set the default shell for the following RUN instructions to bash instead of sh
 SHELL ["/bin/bash", "-c"]
