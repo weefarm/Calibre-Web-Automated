@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # See CONTRIBUTORS for full list of authors.
 
+import logging
 import os
 import re
 import sys
@@ -44,37 +45,48 @@ def load_dependencies(optional=False):
         if os.path.exists(req_path):
             with open(req_path, 'r') as f:
                 for line in f:
-                    if not line.startswith('#') and not line == '\n' and not line.startswith('git'):
-                        res = re.match(r'(.*?)([<=>\s]+)([\d\.]+),?\s?([<=>\s]+)?([\d\.]+)?(?:\s?;\s?'
-                                       r'(?:(python_version)\s?([<=>]+)\s?\'([\d\.]+)\'|'
-                                       r'(sys_platform)\s?([\!=]+)\s?\'([\w]+)\'))?', line.strip())
-                        try:
-                            if getattr(sys, 'frozen', False):
-                                dep_version = exe_deps[res.group(1).lower().replace('_', '-')]
-                            else:
-                                if res.group(7) and res.group(8):
-                                    val = res.group(8).split(".")
-                                    if not eval(str(sys.version_info[0]) + "." + "{:02d}".format(sys.version_info[1]) +
-                                                res.group(7) + val[0] + "." + "{:02d}".format(int(val[1]))):
+                    line = line.strip()
+                    if not line or line.startswith('#') or line.startswith('git'):
+                        continue
+                    res = re.match(r'(.*?)([<=>\s]+)([\d\.]+),?\s?([<=>\s]+)?([\d\.]+)?(?:\s?;\s?'
+                                   r'(?:(python_version)\s?([<=>]+)\s?\'([\d\.]+)\'|'
+                                   r'(sys_platform)\s?([\!=]+)\s?\'([\w]+)\'))?', line)
+                    try:
+                        if getattr(sys, 'frozen', False):
+                            dep_version = exe_deps[res.group(1).lower().replace('_', '-')]
+                        else:
+                            if res.group(7) and res.group(8):
+                                val = res.group(8).split(".")
+                                current = (sys.version_info[0], sys.version_info[1])
+                                required = (int(val[0]), int(val[1]) if len(val) > 1 else 0)
+                                op = res.group(7).strip()
+                                if not {
+                                    '<': current < required,
+                                    '<=': current <= required,
+                                    '>': current > required,
+                                    '>=': current >= required,
+                                    '==': current == required,
+                                    '!=': current != required,
+                                }.get(op, current >= required):
+                                    continue
+                            elif res.group(10) and res.group(11):
+                                # only installed if platform is eqal, don't check if platform is not equal
+                                if res.group(10) == "==":
+                                    if sys.platform != res.group(11):
                                         continue
-                                elif res.group(10) and res.group(11):
-                                    # only installed if platform is eqal, don't check if platform is not equal
-                                    if res.group(10) == "==":
-                                        if sys.platform != res.group(11):
-                                            continue
-                                    # installed if platform is not eqal, don't check if platform is equal
-                                    elif res.group(10) == "!=":
-                                        if sys.platform == res.group(11):
-                                            continue
-                                if importlib:
-                                    dep_version = version(res.group(1))
-                                else:
-                                    dep_version = pkg_resources.get_distribution(res.group(1)).version
-                        except (ImportNotFound, KeyError):
-                            if optional:
-                                continue
-                            dep_version = "not installed"
-                        deps.append([dep_version, res.group(1), res.group(2), res.group(3), res.group(4), res.group(5)])
+                                # installed if platform is not eqal, don't check if platform is equal
+                                elif res.group(10) == "!=":
+                                    if sys.platform == res.group(11):
+                                        continue
+                            if importlib:
+                                dep_version = version(res.group(1))
+                            else:
+                                dep_version = pkg_resources.get_distribution(res.group(1)).version
+                    except (ImportNotFound, KeyError):
+                        if optional:
+                            continue
+                        dep_version = "not installed"
+                    deps.append([dep_version, res.group(1), res.group(2), res.group(3), res.group(4), res.group(5)])
     return deps
 
 
@@ -130,4 +142,7 @@ def dependency_check(optional=False):
                          'found': dep[0],
                          "target": dep[4] + dep[5]})
                     continue
+        elif dep[4] or dep[5]:
+            logging.warning("Incomplete upper-bound version constraint for %s: operator=%r version=%r",
+                            dep[1], dep[4], dep[5])
     return d
